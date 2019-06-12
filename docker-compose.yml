@@ -1,0 +1,78 @@
+version: '3'
+services: 
+  db:
+    image: rsacal/zabbix-3.4-alpine:mariadb
+    command: [mysqld, --character-set-server=utf8, --collation-server=utf8_bin, --default-authentication-plugin=mysql_native_password]
+    environment:
+      MYSQL_ROOT_PASSWORD: zabbix
+
+  server:
+    image: rsacal/zabbix-3.4-alpine:server
+    links:
+      - db
+      - java-gateway
+    ports:
+      - "10051:10051"
+    environment:
+      DB_SERVER_HOST: db
+      MYSQL_USER: root
+      MYSQL_PASSWORD: zabbix
+      MYSQL_ROOT_PASSWORD: zabbix
+    depends_on:
+      - db
+      - java-gateway
+      - snmptraps
+
+
+  web-server:
+    image: rsacal/zabbix-3.4-alpine:web-server-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ZBX_SERVER_HOST: server
+      DB_SERVER_HOST: db
+      MYSQL_USER: root
+      MYSQL_PASSWORD: zabbix
+      PHP_TZ: Europe/Riga
+    depends_on:
+      - db
+      - server
+
+  java-gateway:
+    image: rsacal/zabbix-3.4-alpine:java-gateway
+    ports:
+      - "10052:10052"
+
+  proxy-mysql:
+    image: rsacal/zabbix-3.4-alpine:proxy
+    ports:
+      - "10071:10051"
+    environment:
+      DB_SERVER_HOST: db
+      MYSQL_USER: root
+      MYSQL_PASSWORD: zabbix
+      ZBX_HOSTNAME: proxy
+      ZBX_SERVER_HOST: server
+    links:
+      - server:server
+      - java-gateway:java-gateway
+    depends_on:
+      - server
+      - java-gateway
+      - snmptraps
+
+  agent:
+    image: rsacal/zabbix-3.4-alpine:agent
+    ports:
+      - "10050:10050"
+    environment:
+      ZBX_HOSTNAME: agent
+      ZBX_SERVER_HOST: server
+    links:
+      - server:server
+
+  snmptraps:
+    image: rsacal/zabbix-3.4-alpine:snmptraps
+    ports:
+      - "162:162/udp"
